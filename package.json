@@ -1,0 +1,7 @@
+{
+  "name": "jwt-lab",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {"start": "node server.js", "manual": "node 01-manual.js", "library": "node 02-library.js"},
+  "dependencies": {"express": "^5.1.0", "jsonwebtoken": "^9.0.2"}
+}

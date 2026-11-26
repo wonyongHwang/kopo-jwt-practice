@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>JWT 인증 실습</title>
+<style>body{font:16px system-ui;max-width:780px;margin:40px auto;padding:0 16px}input,button{padding:9px;margin:4px}pre{padding:14px;background:#f2f4f7;white-space:pre-wrap;overflow-wrap:anywhere}button{cursor:pointer}</style></head>
+<body>
+<h1>JWT 인증 실습</h1>
+<p>실습 계정: student / 1234, admin / 5678</p>
+<input id="username" value="student" placeholder="ID" autocomplete="username">
+<input id="password" value="1234" type="password" placeholder="비밀번호" autocomplete="current-password">
+<button id="login">로그인</button>
+<hr>
+<button id="profile">내 정보 조회</button><button id="admin">관리자 API</button>
+<button id="decode">Payload 확인</button><button id="tamper">role 변조 실험</button><button id="logout">로그아웃</button>
+<h2>현재 토큰</h2><pre id="token">없음</pre>
+<h2>실행 결과</h2><pre id="result"></pre>
+<script>
+let token = null; // 메모리에만 보관. 새로고침 시 사라짐.
+const $ = id => document.getElementById(id);
+const show = data => { $('result').textContent = JSON.stringify(data, null, 2); };
+function updateToken(value) { token = value; $('token').textContent = token || '없음'; }
+async function login() {
+  updateToken(null);
+  const res = await fetch('/api/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: $('username').value, password: $('password').value}) });
+  const data = await res.json();
+  if (res.ok) updateToken(data.token);
+  show({ status: res.status, message: res.ok ? '로그인 성공' : data.message });
+}
+async function request(path, value = token) {
+  const res = await fetch(path, { headers: value ? {Authorization: `Bearer ${value}`} : {} });
+  show({ status: res.status, data: await res.json() });
+}
+function decodePart(part) {
+  const binary = atob(part.replace(/-/g, '+').replace(/_/g, '/'));
+  return JSON.parse(new TextDecoder().decode(Uint8Array.from(binary, c => c.charCodeAt(0))));
+}
+function encodePart(obj) {
+  const bytes = new TextEncoder().encode(JSON.stringify(obj));
+  return btoa(Array.from(bytes, b => String.fromCharCode(b)).join('')).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+function decode() {
+  if (!token) return show({message: '먼저 로그인하세요.'});
+  show({payload: decodePart(token.split('.')[1]), warning: '디코딩은 검증이 아닙니다.'});
+}
+async function tamper() {
+  if (!token) return show({message: '먼저 로그인하세요.'});
+  const [h,p,s] = token.split('.');
+  const payload = {...decodePart(p), role: 'admin'};
+  // 원본 토큰은 유지하고 이 실습 서버로만 변조 토큰을 보낸다.
+  await request('/api/admin', `${h}.${encodePart(payload)}.${s}`);
+}
+function bind(id, fn) { $(id).addEventListener('click', async () => { try { await fn(); } catch(e) { show({error:e.message}); } }); }
+bind('login', login); bind('profile', () => request('/api/profile')); bind('admin', () => request('/api/admin'));
+bind('decode', decode); bind('tamper', tamper); bind('logout', () => { updateToken(null); show({message:'클라이언트 토큰 삭제'}); });
+</script>
+</body></html>
